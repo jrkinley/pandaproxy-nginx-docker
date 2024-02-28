@@ -95,6 +95,11 @@ services:
       - redpanda1
       - redpanda2
       - redpanda3
+  # Start nginx container to load balance the Redpanda HTTP proxy and schema registry endpoints.
+  # The HTTP proxy and schema registry services are native to the Redpanda binary and clients
+  # can connect to any broker to use these services, so its safe to use a load balancer here. To
+  # state the obvious, a load balancer cannot be used in front of the Kafka API because clients
+  # must be able to connect to all brokers simultaneously. 
   ngnix:
     image: nginx:stable
     container_name: redpanda-nginx
