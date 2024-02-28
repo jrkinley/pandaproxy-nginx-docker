@@ -1,0 +1,109 @@
+services:
+  redpanda1:
+    command:
+      - redpanda
+      - start
+      - --kafka-addr internal://0.0.0.0:9092,external://0.0.0.0:19092
+      - --advertise-kafka-addr internal://redpanda1:9092,external://localhost:19092
+      - --rpc-addr redpanda1:33145
+      - --advertise-rpc-addr redpanda1:33145
+      - --smp 1
+      - --memory 1G
+      - --mode dev-container
+      - --seeds redpanda1:33145,redpanda2:33145,redpanda3:33145
+    image: docker.redpanda.com/redpandadata/redpanda:latest
+    container_name: redpanda1
+    ports:
+      - 19092:19092 # kafka api
+      - 19644:9644  # admin api
+  redpanda2:
+    command:
+      - redpanda
+      - start
+      - --kafka-addr internal://0.0.0.0:9092,external://0.0.0.0:19092
+      - --advertise-kafka-addr internal://redpanda2:9092,external://localhost:29092
+      - --rpc-addr redpanda2:33145
+      - --advertise-rpc-addr redpanda2:33145
+      - --smp 1
+      - --memory 1G
+      - --mode dev-container
+      - --seeds redpanda1:33145,redpanda2:33145,redpanda3:33145
+    image: docker.redpanda.com/redpandadata/redpanda:latest
+    container_name: redpanda2
+    ports:
+      - 29092:29092 # kafka api
+      - 29644:9644  # admin api
+    depends_on:
+      - redpanda1
+  redpanda3:
+    command:
+      - redpanda
+      - start
+      - --kafka-addr internal://0.0.0.0:9092,external://0.0.0.0:39092
+      - --advertise-kafka-addr internal://redpanda3:9092,external://localhost:39092
+      - --rpc-addr redpanda3:33145
+      - --advertise-rpc-addr redpanda3:33145
+      - --smp 1
+      - --memory 1G
+      - --mode dev-container
+      - --seeds redpanda1:33145,redpanda2:33145,redpanda3:33145
+    image: docker.redpanda.com/redpandadata/redpanda:latest
+    container_name: redpanda3
+    ports:
+      - 39092:39092 # kafka api
+      - 39644:9644  # admin api
+    depends_on:
+      - redpanda1
+      - redpanda2
+  console:
+    image: redpandadata/console:latest
+    container_name: redpanda-console
+    restart: on-failure
+    entrypoint: /bin/sh
+    command: -c "echo \"$$CONSOLE_CONFIG_FILE\" > /tmp/config.yml; /app/console"
+    environment:
+      CONFIG_FILEPATH: /tmp/config.yml
+      CONSOLE_CONFIG_FILE: |
+        redpanda:
+          adminApi:
+            enabled: true
+            urls:
+              - "http://redpanda1:9644"
+              - "http://redpanda2:9644"
+              - "http://redpanda3:9644"
+        kafka:
+          brokers:
+            - "redpanda1:9092"
+            - "redpanda2:9092"
+            - "redpanda3:9092"
+          schemaRegistry:
+            enabled: true
+            urls:
+              - "http://redpanda1:8081"
+              - "http://redpanda2:8081"
+              - "http://redpanda3:8081"
+          protobuf:
+            enabled: true
+            schemaRegistry:
+              enabled: true
+              refreshInterval: 1m
+        connect:
+          enabled: false
+    ports:
+      - 8080:8080
+    depends_on:
+      - redpanda1
+      - redpanda2
+      - redpanda3
+  ngnix:
+    image: nginx:stable
+    container_name: redpanda-nginx
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf
+    ports:
+      - 18081:18081 # schema registry
+      - 18082:18082 # http proxy
+    depends_on:
+      - redpanda1
+      - redpanda2
+      - redpanda3
